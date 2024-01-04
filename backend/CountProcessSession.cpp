@@ -19,8 +19,8 @@ CountProcessSession::~CountProcessSession() { fs::remove(file_path_); }
 void CountProcessSession::run() {
     std::cout << "C: " << std::string(1, count_char_) << std::endl;
 
-    child_ = bp::child("/home/aleksandar/Projects/chcount_project/cli/build/chcount", "-c", std::string(1, count_char_),
-                       "-f", file_path_.string(), bp::std_out > ap_);
+    child_ = bp::child(shared_state_->chcountExecutablePath().string(), "-c", std::string(1, count_char_), "-f",
+                       file_path_.string(), bp::std_out > ap_);
 
     net::async_read(ap_, boost::asio::buffer(buf_),
                     beast::bind_front_handler(&CountProcessSession::onRead, shared_from_this()));

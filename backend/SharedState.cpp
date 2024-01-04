@@ -5,7 +5,8 @@
 namespace fs = std::filesystem;
 namespace uuids = boost::uuids;
 
-SharedState::SharedState(fs::path tmp_storage) : tmp_storage_{std::move(tmp_storage)} {}
+SharedState::SharedState(fs::path tmp_storage, fs::path chcount_executable)
+    : tmp_storage_{std::move(tmp_storage)}, chcount_executable_{std::move(chcount_executable)} {}
 
 uuids::uuid SharedState::createUuid() noexcept { return random_gen_(); }
 
