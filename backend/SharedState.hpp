@@ -20,6 +20,8 @@ public:
 
     bool contains(boost::uuids::uuid session_id);
 
+    void send(boost::uuids::uuid user_id, boost::uuids::uuid request_id, std::string result);
+
     void join(WebSocketSession* ws);
     void leave(WebSocketSession* ws);
 

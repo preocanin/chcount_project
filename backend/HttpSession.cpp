@@ -126,8 +126,13 @@ void HttpSession::onRead(beast::error_code ec, std::size_t) {
 
     if (handle_request_result.request_id.has_value() && handle_request_result.tmp_file.has_value()) {
         // Run counting in a separate process
-        // std::make_shared<CountProcessSession>(ioc_, shared_state_, 'c',
-        // handle_request_result.tmp_file.value())->run();
+        auto user_id = handle_request_result.user_id.value();
+        auto request_id = handle_request_result.request_id.value();
+        auto tmp_file = handle_request_result.tmp_file.value();
+
+        std::make_shared<CountProcessSession>(ioc_, shared_state_, std::move(user_id), std::move(request_id), 'c',
+                                              tmp_file)
+            ->run();
     }
 }
 

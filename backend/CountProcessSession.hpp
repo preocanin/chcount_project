@@ -3,13 +3,15 @@
 #include <array>
 #include <boost/asio/io_context.hpp>
 #include <boost/process.hpp>
+#include <boost/uuid/uuid.hpp>
 #include <filesystem>
 
 class SharedState;
 
 class CountProcessSession : public std::enable_shared_from_this<CountProcessSession> {
 public:
-    CountProcessSession(boost::asio::io_context& ioc, std::shared_ptr<SharedState> const& shared_state, char count_char,
+    CountProcessSession(boost::asio::io_context& ioc, std::shared_ptr<SharedState> const& shared_state,
+                        boost::uuids::uuid user_id, boost::uuids::uuid request_id, char count_char,
                         std::filesystem::path file_path);
 
     ~CountProcessSession();
@@ -20,6 +22,8 @@ private:
     void onRead(boost::system::error_code ec, std::size_t size);
 
     std::vector<char> buf_;
+    boost::uuids::uuid user_id_;
+    boost::uuids::uuid request_id_;
     boost::process::async_pipe ap_;
     std::filesystem::path file_path_;
     char count_char_;
