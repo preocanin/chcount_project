@@ -12,7 +12,7 @@ class SharedState;
 
 class HttpSession : public std::enable_shared_from_this<HttpSession> {
 public:
-    HttpSession(tcp::socket&& socket, std::shared_ptr<SharedState> const& doc_path);
+    HttpSession(net::io_context& ioc, tcp::socket&& socket, std::shared_ptr<SharedState> const& doc_path);
 
     void run();
 
@@ -23,6 +23,8 @@ private:
     void onRead(beast::error_code ec, std::size_t);
 
     void onWrite(beast::error_code ec, std::size_t, bool keep_alive);
+
+    net::io_context& ioc_;
 
     beast::tcp_stream stream_;
     std::shared_ptr<SharedState> shared_state_;

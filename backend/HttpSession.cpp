@@ -8,20 +8,24 @@
 #include <fstream>
 #include <iostream>
 
-#include "Request.hpp"
+#include "CountProcessSession.hpp"
+#include "Response.hpp"
 #include "SharedState.hpp"
 #include "WebSocketSession.hpp"
+#include "utils/ContentType.hpp"
 
 namespace websocket = beast::websocket;
 namespace uuids = boost::uuids;
 namespace fs = std::filesystem;
+using namespace utils;
 
 // Utilities
 
 std::string_view mime_type(std::string_view path);
 
 template <class Body, class Allocator>
-http::message_generator handle_request(fs::path tmp_storage, http::request<Body, http::basic_fields<Allocator>>&& req);
+http::message_generator handle_request(fs::path tmp_storage, http::request<Body, http::basic_fields<Allocator>>&& req,
+                                       fs::path& tmp_file);
 
 fs::path createTmpFilePath(fs::path tmp_storage) {
     uuids::random_generator rgen;
@@ -56,8 +60,8 @@ fs::path writeBodyToTempFile(fs::path tmp_storage, Body&& body) {
 
 // --------------
 
-HttpSession::HttpSession(tcp::socket&& socket, std::shared_ptr<SharedState> const& shared_state)
-    : stream_{std::move(socket)}, shared_state_{shared_state} {}
+HttpSession::HttpSession(net::io_context& ioc, tcp::socket&& socket, std::shared_ptr<SharedState> const& shared_state)
+    : ioc_{ioc}, stream_{std::move(socket)}, shared_state_{shared_state} {}
 
 void HttpSession::run() {
     net::dispatch(stream_.get_executor(), beast::bind_front_handler(&HttpSession::doRead, shared_from_this()));
@@ -96,7 +100,9 @@ void HttpSession::onRead(beast::error_code ec, std::size_t) {
     }
 
     // Handle request
-    http::message_generator msg = handle_request(shared_state_->tmpStoragePath(), parser_->release());
+    fs::path tmp_file;
+
+    http::message_generator msg = handle_request(shared_state_->tmpStoragePath(), parser_->release(), tmp_file);
 
     bool const keep_alive = msg.keep_alive();
 
@@ -105,6 +111,9 @@ void HttpSession::onRead(beast::error_code ec, std::size_t) {
     beast::async_write(stream_, std::move(msg), [self, keep_alive](beast::error_code ec, std::size_t bytes) {
         self->onWrite(ec, bytes, keep_alive);
     });
+
+    // Run counting in a separate process
+    std::make_shared<CountProcessSession>(ioc_, shared_state_, 'c', tmp_file)->run();
 }
 
 void HttpSession::onWrite(beast::error_code ec, std::size_t, bool keep_alive) {
@@ -154,8 +163,9 @@ std::string_view mime_type(std::string_view path) {
 }
 
 template <class Body, class Allocator>
-http::message_generator handle_request(fs::path tmp_storage, http::request<Body, http::basic_fields<Allocator>>&& req) {
-    using namespace request;
+http::message_generator handle_request(fs::path tmp_storage, http::request<Body, http::basic_fields<Allocator>>&& req,
+                                       fs::path& tmp_file) {
+    using namespace response;
 
     auto const& method = req.method();
     auto const& target = req.target();
@@ -179,15 +189,15 @@ http::message_generator handle_request(fs::path tmp_storage, http::request<Body,
     // METHOD: POST
     // PATH: /api/count
     // CONTENT_TYPE: application/json
-    else if (method == http::verb::post && target == "/api/count" && content_type == content_type::application_json) {
-        auto const tmp_file = writeBodyToTempFile(tmp_storage, body);
+    else if (method == http::verb::post && target == "/api/count" && content_type == content_type::text_plain) {
+        tmp_file = writeBodyToTempFile(tmp_storage, body);
 
         std::cout << "TMP_FILE: " << tmp_file << std::endl;
 
         if (!tmp_file.empty()) {
             http::response<http::empty_body> res{http::status::ok, req.version()};
             res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-            res.set(http::field::content_type, content_type::text_plain);
+            res.set(http::field::content_type, ::content_type::text_plain);
             res.content_length(0);
             res.keep_alive(req.keep_alive());
             return res;
@@ -199,62 +209,62 @@ http::message_generator handle_request(fs::path tmp_storage, http::request<Body,
     else {
         return createBadRequest(req, "Unsupported HTTP-method or Content-Type");
     }
+}
 
-    /*
-    // Make sure we can handle the method
-    if (req.method() != http::verb::get && req.method() != http::verb::head) {
-        return createBadRequest(req, "Unknown HTTP-method");
-    }
+/*
+// Make sure we can handle the method
+if (req.method() != http::verb::get && req.method() != http::verb::head) {
+    return createBadRequest(req, "Unknown HTTP-method");
+}
 
-    // Request path must be absolute and not contain "..".
-    if (req.target().empty() || req.target()[0] != '/' ||
-        req.target().find("..") != beast::string_view::npos) {
-        return createBadRequest(req, "Illegal request-target");
-    }
+// Request path must be absolute and not contain "..".
+if (req.target().empty() || req.target()[0] != '/' ||
+    req.target().find("..") != beast::string_view::npos) {
+    return createBadRequest(req, "Illegal request-target");
+}
 
-    // Build the path to the requested file
-    auto docPath = std::filesystem::path(doc_root);
-    docPath += std::filesystem::path(req.target());
+// Build the path to the requested file
+auto docPath = std::filesystem::path(doc_root);
+docPath += std::filesystem::path(req.target());
 
-    std::string path = docPath;
-    if (req.target().back() == '/') path.append("index.html");
+std::string path = docPath;
+if (req.target().back() == '/') path.append("index.html");
 
-    // Attempt to open the file
-    beast::error_code ec;
-    http::file_body::value_type body;
-    body.open(path.c_str(), beast::file_mode::scan, ec);
+// Attempt to open the file
+beast::error_code ec;
+http::file_body::value_type body;
+body.open(path.c_str(), beast::file_mode::scan, ec);
 
-    // Handle the case where the file doesn't exist
-    if (ec == boost::system::errc::no_such_file_or_directory) {
-        return createNotFound(req, req.target());
-    }
+// Handle the case where the file doesn't exist
+if (ec == boost::system::errc::no_such_file_or_directory) {
+    return createNotFound(req, req.target());
+}
 
-    // Handle an unknown error
-    if (ec) {
-        return createServerError(req, ec.message());
-    }
+// Handle an unknown error
+if (ec) {
+    return createServerError(req, ec.message());
+}
 
-    // Cache the size since we need it after the move
-    auto const size = body.size();
+// Cache the size since we need it after the move
+auto const size = body.size();
 
-    // Respond to HEAD request
-    if (req.method() == http::verb::head) {
-        http::response<http::empty_body> res{http::status::ok, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, mime_type(path));
-        res.content_length(size);
-        res.keep_alive(req.keep_alive());
-        return res;
-    }
-
-    // Respond to GET request
-    http::response<http::file_body> res{
-        std::piecewise_construct, std::make_tuple(std::move(body)),
-        std::make_tuple(http::status::ok, req.version())};
+// Respond to HEAD request
+if (req.method() == http::verb::head) {
+    http::response<http::empty_body> res{http::status::ok, req.version()};
     res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
     res.set(http::field::content_type, mime_type(path));
     res.content_length(size);
     res.keep_alive(req.keep_alive());
     return res;
-    */
 }
+
+// Respond to GET request
+http::response<http::file_body> res{
+    std::piecewise_construct, std::make_tuple(std::move(body)),
+    std::make_tuple(http::status::ok, req.version())};
+res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+res.set(http::field::content_type, mime_type(path));
+res.content_length(size);
+res.keep_alive(req.keep_alive());
+return res;
+*/

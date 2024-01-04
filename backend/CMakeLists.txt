@@ -14,13 +14,16 @@ add_executable(chcount_server
     HttpSession.cpp
     WebSocketSession.cpp
     SharedState.cpp
+    CountProcessSession.cpp
 
     # Headers
     Listener.hpp
     HttpSession.hpp
-    Request.hpp
+    Response.hpp
     WebSocketSession.hpp
     SharedState.hpp
+    CountProcessSession.hpp
+    utils/ContentType.hpp
 )
 
 target_link_libraries(chcount_server PRIVATE Boost::program_options Boost::json)
