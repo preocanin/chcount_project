@@ -11,8 +11,10 @@ namespace fs = std::filesystem;
 namespace uuids = boost::uuids;
 namespace json = boost::json;
 
-SharedState::SharedState(fs::path tmp_storage, fs::path chcount_executable)
-    : tmp_storage_{std::move(tmp_storage)}, chcount_executable_{std::move(chcount_executable)} {}
+SharedState::SharedState(fs::path docs, fs::path tmp_storage, fs::path chcount_executable)
+    : docs_{std::move(docs)},
+      tmp_storage_{std::move(tmp_storage)},
+      chcount_executable_{std::move(chcount_executable)} {}
 
 uuids::uuid SharedState::createUuid() noexcept { return random_gen_(); }
 

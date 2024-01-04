@@ -192,19 +192,57 @@ HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_sta
     auto const& content_type = req[http::field::content_type];
     auto const& body = req.body();
 
-    std::cout << "METHOD: " << method << std::endl;
-    std::cout << "TARGET: " << target << std::endl;
-    std::cout << "CONTENT TYPE: " << content_type << std::endl;
-
     // GET: /
-    if (method == http::verb::get && target == "/") {
-        http::response<http::empty_body> res{http::status::ok, req.version()};
+    if (method == http::verb::get) {
+        // Request path must be absolute and not contain "..".
+        if (target.empty() || target[0] != '/' || target.find("..") != beast::string_view::npos) {
+            return {createBadRequest(req, "Illegal request-target")};
+        }
+
+        auto docPath = shared_state_->docsPath();
+
+        if (target != "/") {
+            docPath /= target.data();
+        }
+
+        // If path ends with '/' then retreive index.html
+        if (target.back() == '/') {
+            docPath /= "index.html";
+        }
+
+        if (!fs::exists(docPath)) {
+            return {createNotFound(req, "File not found")};
+        }
+
+        auto path = docPath.string();
+
+        // Attempt to open the file
+        boost::system::error_code ec;
+        http::file_body::value_type response_body;
+        response_body.open(path.c_str(), beast::file_mode::scan, ec);
+
+        // Handle the case where the file doesn't exist
+        if (ec == boost::system::errc::no_such_file_or_directory) {
+            return {createNotFound(req, req.target())};
+        }
+
+        // Handle an unknown error
+        if (ec) {
+            return {createServerError(req, ec.message())};
+        }
+
+        // Cache the size since we need it after the move
+        auto const size = response_body.size();
+
+        // Respond to GET request
+        http::response<http::file_body> res{std::piecewise_construct, std::make_tuple(std::move(response_body)),
+                                            std::make_tuple(http::status::ok, req.version())};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, content_type::text_plain);
-        res.content_length(0);
+        res.set(http::field::content_type, mime_type(path));
+        res.content_length(size);
         res.keep_alive(req.keep_alive());
 
-        return {res};
+        return {std::move(res)};
     }
     // METHOD: POST
     // PATH: /api/count
@@ -233,7 +271,7 @@ HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_sta
                 res.keep_alive(req.keep_alive());
                 res.prepare_payload();
 
-                return {res, countDto.getId(), request_id, tmp_file};
+                return {std::move(res), countDto.getId(), request_id, tmp_file};
             } else {
                 return {createBadRequest(req, "Cannot create tmp file")};
             }
@@ -246,61 +284,3 @@ HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_sta
         return {createBadRequest(req, "Unsupported HTTP-method or Content-Type")};
     }
 }
-
-/*
-// Make sure we can handle the method
-if (req.method() != http::verb::get && req.method() != http::verb::head) {
-    return createBadRequest(req, "Unknown HTTP-method");
-}
-
-// Request path must be absolute and not contain "..".
-if (req.target().empty() || req.target()[0] != '/' ||
-    req.target().find("..") != beast::string_view::npos) {
-    return createBadRequest(req, "Illegal request-target");
-}
-
-// Build the path to the requested file
-auto docPath = std::filesystem::path(doc_root);
-docPath += std::filesystem::path(req.target());
-
-std::string path = docPath;
-if (req.target().back() == '/') path.append("index.html");
-
-// Attempt to open the file
-beast::error_code ec;
-http::file_body::value_type body;
-body.open(path.c_str(), beast::file_mode::scan, ec);
-
-// Handle the case where the file doesn't exist
-if (ec == boost::system::errc::no_such_file_or_directory) {
-    return createNotFound(req, req.target());
-}
-
-// Handle an unknown error
-if (ec) {
-    return createServerError(req, ec.message());
-}
-
-// Cache the size since we need it after the move
-auto const size = body.size();
-
-// Respond to HEAD request
-if (req.method() == http::verb::head) {
-    http::response<http::empty_body> res{http::status::ok, req.version()};
-    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.set(http::field::content_type, mime_type(path));
-    res.content_length(size);
-    res.keep_alive(req.keep_alive());
-    return res;
-}
-
-// Respond to GET request
-http::response<http::file_body> res{
-    std::piecewise_construct, std::make_tuple(std::move(body)),
-    std::make_tuple(http::status::ok, req.version())};
-res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-res.set(http::field::content_type, mime_type(path));
-res.content_length(size);
-res.keep_alive(req.keep_alive());
-return res;
-*/

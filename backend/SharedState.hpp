@@ -11,10 +11,12 @@ class WebSocketSession;
 
 class SharedState {
 public:
-    explicit SharedState(std::filesystem::path tmp_storage, std::filesystem::path chcount_executable);
+    explicit SharedState(std::filesystem::path docs, std::filesystem::path tmp_storage,
+                         std::filesystem::path chcount_executable);
 
     boost::uuids::uuid createUuid() noexcept;
 
+    std::filesystem::path docsPath() const noexcept { return docs_; }
     std::filesystem::path tmpStoragePath() const noexcept { return tmp_storage_; }
     std::filesystem::path chcountExecutablePath() const noexcept { return chcount_executable_; }
 
@@ -28,6 +30,7 @@ public:
 private:
     std::mutex mutex_;
 
+    std::filesystem::path docs_;
     std::filesystem::path tmp_storage_;
     std::filesystem::path chcount_executable_;
     boost::uuids::random_generator random_gen_;

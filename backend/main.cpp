@@ -12,6 +12,7 @@ using tcp = boost::asio::ip::tcp;
 
 struct Options {
     std::string host;
+    fs::path docs;
     fs::path tmp_storage;
     fs::path chcount_executable;
     net::ip::port_type port;
@@ -43,8 +44,9 @@ int main(int argc, char** argv) {
 
     net::io_context ioc{static_cast<int>(threads_count)};
 
-    std::make_shared<Listener>(ioc, tcp::endpoint{host, port},
-                               std::make_shared<SharedState>(options.tmp_storage, options.chcount_executable))
+    std::make_shared<Listener>(
+        ioc, tcp::endpoint{host, port},
+        std::make_shared<SharedState>(options.docs, options.tmp_storage, options.chcount_executable))
         ->run();
 
     net::signal_set signals(ioc, SIGINT, SIGTERM);
@@ -85,6 +87,7 @@ void exitWithErrorMessage(std::string const& error_message, po::options_descript
 Options parseArgumentOptions(int argc, char** argv) {
     Options result;
     std::int32_t port;
+    std::string docs;
     std::string tmp_storage;
     std::string chcount_executable;
 
@@ -95,6 +98,7 @@ Options parseArgumentOptions(int argc, char** argv) {
         ("help", "Help message")
         ("host,H", po::value<std::string>(&result.host)->default_value("127.0.0.1"), "Host on which server listens")
         ("port,P", po::value<std::int32_t>(&port)->default_value(3000), "Port on which server listens")
+        ("docs,D", po::value<std::string>(&docs), "Served documents location directory")
         ("tmp-storage,T", po::value<std::string>(&tmp_storage)->default_value("."), "Temporary storage directory")
         ("chcount-executable", po::value<std::string>(&chcount_executable), "Chcount executable path");
     // clang-format on
@@ -120,6 +124,21 @@ Options parseArgumentOptions(int argc, char** argv) {
             exitWithErrorMessage("Temporary storage path cannot be empty", desc);
         }
 
+        // docs
+        if (!vm.count("docs")) {
+            exitWithErrorMessage("Docs location path must be provided", desc);
+        }
+
+        result.docs = fs::absolute(docs);
+
+        if (!fs::exists(result.docs)) {
+            exitWithErrorMessage("Docs location path doesn't exists", desc);
+        }
+
+        if (!fs::is_directory(result.docs)) {
+            exitWithErrorMessage("Docs location path must be a directory", desc);
+        }
+
         // tmp-storage checks
         result.tmp_storage = fs::absolute(tmp_storage);
 
@@ -132,6 +151,9 @@ Options parseArgumentOptions(int argc, char** argv) {
         }
 
         // chcount-executable checks
+        if (!vm.count("chcount-executable")) {
+            exitWithErrorMessage("Chcount path must be provided", desc);
+        }
 
         if (chcount_executable.empty()) {
             exitWithErrorMessage("Chcount path cannot be empty", desc);
