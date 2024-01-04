@@ -24,6 +24,7 @@ add_executable(chcount_server
     SharedState.hpp
     CountProcessSession.hpp
     utils/ContentType.hpp
+    dto/CountDto.hpp
 )
 
 target_link_libraries(chcount_server PRIVATE Boost::program_options Boost::json)

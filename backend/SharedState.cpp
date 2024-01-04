@@ -10,6 +10,11 @@ SharedState::SharedState(fs::path tmp_storage, fs::path chcount_executable)
 
 uuids::uuid SharedState::createUuid() noexcept { return random_gen_(); }
 
+bool SharedState::contains(boost::uuids::uuid session_id) {
+    std::lock_guard lock{mutex_};
+    return (sessions_.count(session_id) != 0);
+}
+
 void SharedState::join(WebSocketSession* ws) {
     std::lock_guard lock{mutex_};
     sessions_.emplace(std::make_pair(ws->getId(), ws));

@@ -18,14 +18,17 @@ public:
     std::filesystem::path tmpStoragePath() const noexcept { return tmp_storage_; }
     std::filesystem::path chcountExecutablePath() const noexcept { return chcount_executable_; }
 
+    bool contains(boost::uuids::uuid session_id);
+
     void join(WebSocketSession* ws);
     void leave(WebSocketSession* ws);
 
 private:
+    std::mutex mutex_;
+
     std::filesystem::path tmp_storage_;
     std::filesystem::path chcount_executable_;
     boost::uuids::random_generator random_gen_;
 
-    std::mutex mutex_;
     std::unordered_map<boost::uuids::uuid, WebSocketSession*, boost::hash<boost::uuids::uuid>> sessions_;
 };

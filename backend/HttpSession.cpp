@@ -1,6 +1,10 @@
 #include "HttpSession.hpp"
 
 #include <boost/format.hpp>
+#include <boost/json/kind.hpp>
+#include <boost/json/parse.hpp>
+#include <boost/json/value.hpp>
+#include <boost/lexical_cast.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -12,34 +16,42 @@
 #include "Response.hpp"
 #include "SharedState.hpp"
 #include "WebSocketSession.hpp"
+#include "dto/CountDto.hpp"
 #include "utils/ContentType.hpp"
 
 namespace websocket = beast::websocket;
 namespace uuids = boost::uuids;
 namespace fs = std::filesystem;
+namespace json = boost::json;
 using namespace utils;
 
 // Utilities
 
+namespace {
+
+struct HandleRequestResult {
+    template <class Body>
+    HandleRequestResult(http::response<Body> res, std::optional<uuids::uuid> uid = {},
+                        std::optional<uuids::uuid> rid = {}, std::optional<fs::path> tmp = {})
+        : msg{std::move(res)}, user_id{std::move(uid)}, request_id{std::move(rid)}, tmp_file{std::move(tmp)} {}
+
+    http::message_generator msg;
+    std::optional<uuids::uuid> user_id{};
+    std::optional<uuids::uuid> request_id{};
+    std::optional<fs::path> tmp_file{};
+};
+
+}  // namespace
+
 std::string_view mime_type(std::string_view path);
 
 template <class Body, class Allocator>
-http::message_generator handle_request(fs::path tmp_storage, http::request<Body, http::basic_fields<Allocator>>&& req,
-                                       fs::path& tmp_file);
+HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_state,
+                                  http::request<Body, http::basic_fields<Allocator>>&& req);
 
-fs::path createTmpFilePath(fs::path tmp_storage) {
-    uuids::random_generator rgen;
-
-    auto const& uuid = uuids::to_string(rgen());
-    tmp_storage += "/";
-    tmp_storage += (boost::format("%1%.txt") % uuid).str();
-
-    return tmp_storage;
-}
-
-template <class Body>
-fs::path writeBodyToTempFile(fs::path tmp_storage, Body&& body) {
-    auto const tmp_file_path = createTmpFilePath(tmp_storage);
+fs::path writeDataToTmpFile(uuids::uuid request_id, fs::path tmp_storage, std::string_view data) {
+    auto tmp_file_path = tmp_storage;
+    tmp_file_path /= (boost::format("tmp_%1%.txt") % uuids::to_string(request_id)).str();
 
     try {
         std::ofstream fout{tmp_file_path};
@@ -48,7 +60,7 @@ fs::path writeBodyToTempFile(fs::path tmp_storage, Body&& body) {
             return {};
         }
 
-        fout << body;
+        fout << data;
         fout.close();
 
         return tmp_file_path;
@@ -100,9 +112,9 @@ void HttpSession::onRead(beast::error_code ec, std::size_t) {
     }
 
     // Handle request
-    fs::path tmp_file;
+    auto handle_request_result = handleRequest(shared_state_, parser_->release());
 
-    http::message_generator msg = handle_request(shared_state_->tmpStoragePath(), parser_->release(), tmp_file);
+    auto& msg = handle_request_result.msg;
 
     bool const keep_alive = msg.keep_alive();
 
@@ -112,8 +124,11 @@ void HttpSession::onRead(beast::error_code ec, std::size_t) {
         self->onWrite(ec, bytes, keep_alive);
     });
 
-    // Run counting in a separate process
-    std::make_shared<CountProcessSession>(ioc_, shared_state_, 'c', tmp_file)->run();
+    if (handle_request_result.request_id.has_value() && handle_request_result.tmp_file.has_value()) {
+        // Run counting in a separate process
+        // std::make_shared<CountProcessSession>(ioc_, shared_state_, 'c',
+        // handle_request_result.tmp_file.value())->run();
+    }
 }
 
 void HttpSession::onWrite(beast::error_code ec, std::size_t, bool keep_alive) {
@@ -163,8 +178,8 @@ std::string_view mime_type(std::string_view path) {
 }
 
 template <class Body, class Allocator>
-http::message_generator handle_request(fs::path tmp_storage, http::request<Body, http::basic_fields<Allocator>>&& req,
-                                       fs::path& tmp_file) {
+HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_state_,
+                                  http::request<Body, http::basic_fields<Allocator>>&& req) {
     using namespace response;
 
     auto const& method = req.method();
@@ -184,30 +199,46 @@ http::message_generator handle_request(fs::path tmp_storage, http::request<Body,
         res.content_length(0);
         res.keep_alive(req.keep_alive());
 
-        return res;
+        return {res};
     }
     // METHOD: POST
     // PATH: /api/count
     // CONTENT_TYPE: application/json
-    else if (method == http::verb::post && target == "/api/count" && content_type == content_type::text_plain) {
-        tmp_file = writeBodyToTempFile(tmp_storage, body);
+    else if (method == http::verb::post && target == "/api/count" && content_type == content_type::application_json) {
+        try {
+            dto::CountDto countDto = dto::CountDto::parse(body);
 
-        std::cout << "TMP_FILE: " << tmp_file << std::endl;
+            if (!shared_state_->contains(countDto.getId())) {
+                return {createBadRequest(req, "Unknown id")};
+            }
 
-        if (!tmp_file.empty()) {
-            http::response<http::empty_body> res{http::status::ok, req.version()};
-            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-            res.set(http::field::content_type, ::content_type::text_plain);
-            res.content_length(0);
-            res.keep_alive(req.keep_alive());
-            return res;
-        } else {
-            return createBadRequest(req, "Cannot create tmp file");
+            auto request_id = shared_state_->createUuid();
+
+            auto tmp_file = writeDataToTmpFile(request_id, shared_state_->tmpStoragePath(), countDto.getData());
+
+            std::cout << "TMP_FILE: " << tmp_file << std::endl;
+
+            if (!tmp_file.empty()) {
+                json::value response_body{{"request_id", uuids::to_string(request_id)}};
+
+                http::response<http::string_body> res{http::status::ok, req.version()};
+                res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+                res.set(http::field::content_type, ::content_type::text_plain);
+                res.body() = json::serialize(response_body);
+                res.keep_alive(req.keep_alive());
+                res.prepare_payload();
+
+                return {res, countDto.getId(), request_id, tmp_file};
+            } else {
+                return {createBadRequest(req, "Cannot create tmp file")};
+            }
+        } catch (std::runtime_error const& e) {
+            return {createBadRequest(req, e.what())};
         }
     }
     // Unsupported
     else {
-        return createBadRequest(req, "Unsupported HTTP-method or Content-Type");
+        return {createBadRequest(req, "Unsupported HTTP-method or Content-Type")};
     }
 }
 
