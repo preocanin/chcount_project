@@ -201,13 +201,14 @@ HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_sta
 
         auto docPath = shared_state_->docsPath();
 
-        if (target != "/") {
-            docPath /= target.data();
-        }
-
-        // If path ends with '/' then retreive index.html
-        if (target.back() == '/') {
+        if (target == "/") {
             docPath /= "index.html";
+        } else {
+            if (target[0] != '/') {
+                docPath /= target.data();
+            } else {
+                docPath += target.data();
+            }
         }
 
         if (!fs::exists(docPath)) {
