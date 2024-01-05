@@ -8,11 +8,18 @@ Project consists of multiple parts:
 2. [Server Application](./backend/) which servers frontend page and provides API for requesting the character counting
 3. [Frontend SPA](./frontend/) which provides simple interface for the server usage
 
-# Install dependencies
+## Install dependencies
 
 ```bash
 cd path/to/repository/clone/chcount_project
 ./scripts/install_dependencies.sh
 ```
 
-`NOTE:` Script currently only support installing dependencies with `pacman` package manager.
+`NOTE:` Script currently only support installing dependencies with `pacman` and `apt` package manager.
+
+## Future improvements
+
+- Add tests
+- Add support for uploading file
+- Add support for uploading multiple files
+- Make frontend prettier
