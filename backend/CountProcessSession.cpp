@@ -1,20 +1,20 @@
 #include "CountProcessSession.hpp"
 
-#include <boost/beast.hpp>
 #include <iostream>
 
+#include "Beast.hpp"
 #include "SharedState.hpp"
 
-namespace net = boost::asio;
-namespace beast = boost::beast;
 namespace uuids = boost::uuids;
 namespace bp = boost::process;
 namespace fs = std::filesystem;
 
+auto constexpr BUFFER_LIMIT{2000U};
+
 CountProcessSession::CountProcessSession(boost::asio::io_context& ioc, std::shared_ptr<SharedState> const& shared_state,
                                          uuids::uuid user_id, uuids::uuid request_id, char count_char,
                                          fs::path file_path)
-    : buf_(2000),
+    : buf_(BUFFER_LIMIT),
       user_id_{std::move(user_id)},
       request_id_{std::move(request_id)},
       ap_{ioc},
@@ -25,7 +25,7 @@ CountProcessSession::CountProcessSession(boost::asio::io_context& ioc, std::shar
 CountProcessSession::~CountProcessSession() { fs::remove(file_path_); }
 
 void CountProcessSession::run() {
-    child_ = bp::child(shared_state_->chcountExecutablePath().string(), "-c", std::string(1, count_char_), "-f",
+    child_ = bp::child(shared_state_->getChcountExecutablePath().string(), "-c", std::string(1, count_char_), "-f",
                        file_path_.string(), bp::std_out > ap_);
 
     net::async_read(ap_, boost::asio::buffer(buf_),
