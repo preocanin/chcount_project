@@ -1,4 +1,6 @@
-var ws = new WebSocket("ws://localhost:3000/");
+var host = location.host;
+
+var ws = new WebSocket(`ws://${host}/`);
 var user_id = null;
 var request_id = null;
 
@@ -11,8 +13,6 @@ ws.onclose = () => {
 };
 
 ws.onmessage = (ev) => {
-  console.log(ev);
-
   const response = JSON.parse(ev.data);
 
   if (response?.type === "id") {
@@ -41,7 +41,7 @@ btnsubmit.onclick = async function () {
 
   let data = enteredtext.value;
 
-  let response = await fetch("http://localhost:3000/api/count", {
+  let response = await fetch(`http://${host}/api/count`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
