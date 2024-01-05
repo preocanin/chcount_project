@@ -2,7 +2,7 @@ var host = location.host;
 
 var ws = new WebSocket(`ws://${host}/`);
 var user_id = null;
-var request_id = null;
+var results = {};
 
 ws.onopen = () => {
   console.log("Connection Established");
@@ -12,22 +12,33 @@ ws.onclose = () => {
   console.log("Connection Closed");
 };
 
-ws.onmessage = (ev) => {
-  const response = JSON.parse(ev.data);
+const setResult = (value) => {
+  resulthdr.innerText = `Count result: ${value}`;
+};
 
+const handleResponse = (response) => {
   if (response?.type === "id") {
     user_id = response.data;
   } else if (response?.type === "result") {
     result_request_id = response?.data?.request_id;
     result = response?.data?.result;
 
-    btnsubmit.classList.remove("disabled");
-    if (result_request_id === request_id) {
-      resulthdr.innerText = `Count result: ${result}`;
+    // Request sent
+    if (result_request_id in results) {
+      setResult(result);
+      delete results[result_request_id];
+
+      btnsubmit.classList.remove("disabled");
     } else {
-      console.error(`Unknown request result`);
+      results[result_request_id] = result;
     }
   }
+};
+
+ws.onmessage = (ev) => {
+  const response = JSON.parse(ev.data);
+
+  handleResponse(response);
 };
 
 ws.onerror = (ev) => {
@@ -66,5 +77,17 @@ btnsubmit.onclick = async function () {
     return;
   }
 
-  request_id = body?.request_id;
+  let request_id = body?.request_id;
+
+  // Already received result
+  if (request_id in results) {
+    btnsubmit.classList.remove("disabled");
+    let result = results[request_id];
+
+    setResult(result);
+
+    delete results[request_id];
+  } else {
+    results[request_id] = null;
+  }
 };

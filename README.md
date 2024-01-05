@@ -7,6 +7,7 @@ Project consists of multiple parts:
 1. [CLI Application](./cli/) which counts occurencies of specific character in a given file.
 2. [Server Application](./backend/) which servers frontend page and provides API for requesting the character counting
 3. [Frontend SPA](./frontend/) which provides simple interface for the server usage
+4. [Utility scripts](./scripts/)
 
 ## Install dependencies
 
@@ -16,6 +17,14 @@ cd path/to/repository/clone/chcount_project
 ```
 
 `NOTE:` Script currently only support installing dependencies with `pacman` and `apt` package manager.
+
+## Deploy
+
+```bash
+cd path/to/repository/clone/chcount_project
+./scripts/deploy.sh
+cp -r build/* to/custom/location
+```
 
 ## Future improvements
 
