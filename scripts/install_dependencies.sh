@@ -24,13 +24,26 @@ then
     fi
 elif command -v apt &> /dev/null
 then
-    PREREQUISITES=("g++" "cmake" "libboost-all-dev" "clang-format")
+    PREREQUISITES=("g++" "cmake" "clang-format" "build-essential" "python3-dev" "autotools-dev" "libicu-dev" "libbz2-dev")
 
     log_info "Using 'apt' to install prerequisites"
 
     sudo apt upgrade
     sudo apt update 
-    suto apt install ${PREREQUISITES[@]}
+    sudo apt install ${PREREQUISITES[@]}
+
+    BOOST_VERSION="boost_1_84_0"
+
+    wget https://archives.boost.io/release/1.84.0/source/${BOOST_VERSION}.tar.gz
+    tar -xvf ${BOOST_VERSION}.tar.gz
+    cd ${BOOST_VERSION}/
+    sudo ./bootstrap.sh --prefix=/usr/
+    ./b2
+    sudo ./b2 install
+    cd ..
+    rm ${BOOST_VERSION}.tar.gz
+    sudo rm -r ${BOOST_VERSION}/
+
 else
     log_error "Cannot install prerequisites"
 fi

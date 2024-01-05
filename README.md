@@ -16,7 +16,7 @@ cd path/to/repository/clone/chcount_project
 ./scripts/install_dependencies.sh
 ```
 
-`NOTE:` Script currently only support installing dependencies with `pacman` and `apt` package manager.
+`NOTE:` Script currently only support installing dependencies with `pacman` (Manjaro Linux Latest) and `apt` (Ubuntu 22.04) package manager.
 
 ## Deploy
 
