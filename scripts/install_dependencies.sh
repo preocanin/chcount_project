@@ -9,29 +9,10 @@ function log_error() {
     exit 1
 }
 
-function install_if_not_exists() {
-    pacman -Qi $2 &>/dev/null
-
-    PACKAGE_EXISTS=$?
-
-    if (! command -v systemctl status $2 &> /dev/null) &&\
-       (! command -v $2 &> /dev/null) &&\
-       ($PACKAGE_EXISTS -neq 0)
-    then
-       sudo $1 $2
-    else
-       log_info "'$2' already installed"
-    fi
-}
-
-function pacman_install_if_not_exists() {
-    install_if_not_exists "pacman -S" $1
-}
-
-PREREQUISITES=("cmake" "boost")
-
 if command -v pacman &> /dev/null
 then
+    PREREQUISITES=("cmake" "boost")
+
     log_info "Using 'pacman' to install prerequisites"
 
     pacman -Qi ${PREREQUISITES[@]} &> /dev/null
@@ -41,6 +22,15 @@ then
     else
         sudo pacman -S --needed ${PREREQUISITES[@]}
     fi
+elif command -v apt &> /dev/null
+then
+    PREREQUISITES=("g++" "cmake" "libboost-all-dev" "clang-format")
+
+    log_info "Using 'apt' to install prerequisites"
+
+    sudo apt upgrade
+    sudo apt update 
+    suto apt install ${PREREQUISITES[@]}
 else
     log_error "Cannot install prerequisites"
 fi
