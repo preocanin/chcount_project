@@ -1,12 +1,9 @@
 #pragma once
 
-#include <boost/beast.hpp>
 #include <boost/uuid/uuid.hpp>
 
-namespace beast = boost::beast;
-namespace http = beast::http;
-namespace websocket = beast::websocket;
-using tcp = boost::asio::ip::tcp;
+#include "Beast.hpp"
+#include "Net.hpp"
 
 class SharedState;
 
@@ -15,18 +12,68 @@ public:
     WebSocketSession(tcp::socket&& socket, std::shared_ptr<SharedState> const& state);
     ~WebSocketSession();
 
+    /**
+     * @brief Run and setup websocket session and accept handshake
+     *
+     * @tparam Body Request body
+     * @tparam Allocator Basic fields Allocator type
+     * @param req Session upgrade request
+     */
     template <class Body, class Allocator>
     void run(http::request<Body, http::basic_fields<Allocator>> req);
 
+    /**
+     * @brief Send msg to the websocket client
+     *
+     * @param msg Message
+     */
     void send(std::shared_ptr<std::string const> const& msg);
 
+    /**
+     * @brief Get the websocket id
+     *
+     * @return boost::uuids::uuid
+     */
     boost::uuids::uuid getId() const noexcept;
 
 private:
+    /**
+     * @brief Called when the error occured during the session lifetime
+     *
+     * @param ec Error code
+     * @param what What produced the error
+     */
     void fail(beast::error_code ec, char const* what);
+
+    /**
+     * @brief Handles accept of the websocket connection
+     * and sends the connection id to the client
+     *
+     * @param ec Error code
+     */
     void onAccept(beast::error_code ec);
-    void onRead(beast::error_code ec, std::size_t bytes_transfered);
-    void onWrite(beast::error_code ec, std::size_t bytes_transfered);
+
+    /**
+     * @brief Empyt buffer and initiate new async read from websocket
+     *
+     * @param ec Error code
+     */
+    void onRead(beast::error_code ec, std::size_t);
+
+    /**
+     * @brief Erase first element from message queue and if queue is not empty
+     * initiate another async write with next message from queue
+     *
+     * @param ec Error code
+     */
+    void onWrite(beast::error_code ec, std::size_t);
+
+    /**
+     * @brief Add msg to message queue and
+     * initiate async write if no other writes are currently in progress
+     *
+     * @param msg Message to send
+     */
     void onSend(std::shared_ptr<std::string const> const& msg);
 
     boost::uuids::uuid id_;

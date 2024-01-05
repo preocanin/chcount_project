@@ -1,6 +1,5 @@
 #include "WebSocketSession.hpp"
 
-#include <boost/format.hpp>
 #include <boost/json.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -8,7 +7,6 @@
 
 #include "SharedState.hpp"
 
-namespace net = boost::asio;
 namespace uuids = boost::uuids;
 namespace json = boost::json;
 

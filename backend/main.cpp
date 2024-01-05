@@ -19,11 +19,12 @@ struct Options {
 };
 
 /**
- * @brief
+ * @brief Parses command line arguments and check for errors. Resturns parsed
+ * program options.
  *
- * @param argc
- * @param argv
- * @return Options
+ * @param argc Command line arguments count
+ * @param argv Command line arguments strings
+ * @return Parsed program options
  */
 Options parseArgumentOptions(int argc, char** argv);
 

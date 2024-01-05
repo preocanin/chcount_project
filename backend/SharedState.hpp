@@ -16,9 +16,9 @@ public:
 
     boost::uuids::uuid createUuid() noexcept;
 
-    std::filesystem::path docsPath() const noexcept { return docs_; }
-    std::filesystem::path tmpStoragePath() const noexcept { return tmp_storage_; }
-    std::filesystem::path chcountExecutablePath() const noexcept { return chcount_executable_; }
+    std::filesystem::path getDocsPath() const noexcept { return docs_; }
+    std::filesystem::path getTmpStoragePath() const noexcept { return tmp_storage_; }
+    std::filesystem::path getChcountExecutablePath() const noexcept { return chcount_executable_; }
 
     bool contains(boost::uuids::uuid session_id);
 

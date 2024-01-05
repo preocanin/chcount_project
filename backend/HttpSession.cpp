@@ -13,13 +13,13 @@
 #include <iostream>
 
 #include "CountProcessSession.hpp"
-#include "Response.hpp"
 #include "SharedState.hpp"
 #include "WebSocketSession.hpp"
 #include "dto/CountDto.hpp"
 #include "utils/ContentType.hpp"
+#include "utils/MimeType.hpp"
+#include "utils/Response.hpp"
 
-namespace websocket = beast::websocket;
 namespace uuids = boost::uuids;
 namespace fs = std::filesystem;
 namespace json = boost::json;
@@ -41,14 +41,6 @@ struct HandleRequestResult {
     std::optional<fs::path> tmp_file{};
 };
 
-}  // namespace
-
-std::string_view mime_type(std::string_view path);
-
-template <class Body, class Allocator>
-HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_state,
-                                  http::request<Body, http::basic_fields<Allocator>>&& req);
-
 fs::path writeDataToTmpFile(uuids::uuid request_id, fs::path tmp_storage, std::string_view data) {
     auto tmp_file_path = tmp_storage;
     tmp_file_path /= (boost::format("tmp_%1%.txt") % uuids::to_string(request_id)).str();
@@ -69,6 +61,12 @@ fs::path writeDataToTmpFile(uuids::uuid request_id, fs::path tmp_storage, std::s
         return {};
     }
 }
+
+}  // namespace
+
+template <class Body, class Allocator>
+HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_state,
+                                  http::request<Body, http::basic_fields<Allocator>>&& req);
 
 // --------------
 
@@ -130,7 +128,7 @@ void HttpSession::onRead(beast::error_code ec, std::size_t) {
         auto request_id = handle_request_result.request_id.value();
         auto tmp_file = handle_request_result.tmp_file.value();
 
-        std::make_shared<CountProcessSession>(ioc_, shared_state_, std::move(user_id), std::move(request_id), 'c',
+        std::make_shared<CountProcessSession>(ioc_, shared_state_, std::move(user_id), std::move(request_id), 'I',
                                               tmp_file)
             ->run();
     }
@@ -151,37 +149,6 @@ void HttpSession::onWrite(beast::error_code ec, std::size_t, bool keep_alive) {
 
 // Utilities DEFINITIONS
 
-std::string_view mime_type(std::string_view path) {
-    auto const ext = [&path] {
-        auto const pos = path.rfind(".");
-        if (pos == std::string_view::npos) return std::string_view{};
-        return path.substr(pos);
-    }();
-
-    if (ext == ".htm") return "text/html";
-    if (ext == ".html") return "text/html";
-    if (ext == ".php") return "text/html";
-    if (ext == ".css") return "text/css";
-    if (ext == ".txt") return "text/plain";
-    if (ext == ".js") return "application/javascript";
-    if (ext == ".json") return "application/json";
-    if (ext == ".xml") return "application/xml";
-    if (ext == ".swf") return "application/x-shockwave-flash";
-    if (ext == ".flv") return "video/x-flv";
-    if (ext == ".png") return "image/png";
-    if (ext == ".jpe") return "image/jpeg";
-    if (ext == ".jpeg") return "image/jpeg";
-    if (ext == ".jpg") return "image/jpeg";
-    if (ext == ".gif") return "image/gif";
-    if (ext == ".bmp") return "image/bmp";
-    if (ext == ".ico") return "image/vnd.microsoft.icon";
-    if (ext == ".tiff") return "image/tiff";
-    if (ext == ".tif") return "image/tiff";
-    if (ext == ".svg") return "image/svg+xml";
-    if (ext == ".svgz") return "image/svg+xml";
-    return "application/text";
-}
-
 template <class Body, class Allocator>
 HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_state_,
                                   http::request<Body, http::basic_fields<Allocator>>&& req) {
@@ -199,7 +166,7 @@ HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_sta
             return {createBadRequest(req, "Illegal request-target")};
         }
 
-        auto docPath = shared_state_->docsPath();
+        auto docPath = shared_state_->getDocsPath();
 
         if (target == "/") {
             docPath /= "index.html";
@@ -239,7 +206,7 @@ HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_sta
         http::response<http::file_body> res{std::piecewise_construct, std::make_tuple(std::move(response_body)),
                                             std::make_tuple(http::status::ok, req.version())};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, mime_type(path));
+        res.set(http::field::content_type, utils::getMimeType(path));
         res.content_length(size);
         res.keep_alive(req.keep_alive());
 
@@ -258,9 +225,7 @@ HandleRequestResult handleRequest(std::shared_ptr<SharedState> const& shared_sta
 
             auto request_id = shared_state_->createUuid();
 
-            auto tmp_file = writeDataToTmpFile(request_id, shared_state_->tmpStoragePath(), countDto.getData());
-
-            std::cout << "TMP_FILE: " << tmp_file << std::endl;
+            auto tmp_file = writeDataToTmpFile(request_id, shared_state_->getTmpStoragePath(), countDto.getData());
 
             if (!tmp_file.empty()) {
                 json::value response_body{{"request_id", uuids::to_string(request_id)}};

@@ -15,15 +15,19 @@ add_executable(chcount_server
     WebSocketSession.cpp
     SharedState.cpp
     CountProcessSession.cpp
+    utils/MimeType.cpp
 
     # Headers
+    Beast.hpp
+    Net.hpp
     Listener.hpp
     HttpSession.hpp
-    Response.hpp
     WebSocketSession.hpp
     SharedState.hpp
     CountProcessSession.hpp
+    utils/Response.hpp
     utils/ContentType.hpp
+    utils/MimeType.hpp
     dto/CountDto.hpp
 )
 

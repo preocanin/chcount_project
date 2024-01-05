@@ -1,11 +1,7 @@
 #pragma once
 
-#include <boost/asio.hpp>
-#include <boost/beast.hpp>
-
-namespace beast = boost::beast;
-namespace net = boost::asio;
-using tcp = boost::asio::ip::tcp;
+#include "Beast.hpp"
+#include "Net.hpp"
 
 class SharedState;
 
