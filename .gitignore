@@ -6,3 +6,6 @@
 
 # CMake
 **/build/
+
+# Generated files
+**/CMakeUserPresets.json
