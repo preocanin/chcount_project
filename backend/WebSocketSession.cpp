@@ -11,7 +11,7 @@ namespace uuids = boost::uuids;
 namespace json = boost::json;
 
 WebSocketSession::WebSocketSession(tcp::socket&& socket, std::shared_ptr<SharedState> const& shared_state)
-    : id_{shared_state_->createUuid()}, ws_{std::move(socket)}, shared_state_{shared_state} {}
+    : id_{shared_state->createUuid()}, ws_{std::move(socket)}, shared_state_{shared_state} {}
 
 WebSocketSession::~WebSocketSession() { shared_state_->leave(this); }
 

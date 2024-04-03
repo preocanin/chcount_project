@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
     threads.reserve(threads_count);
 
     for (auto i = threads_count; i > 0; --i) {
-        threads.emplace_back([&ioc, i] { ioc.run(); });
+        threads.emplace_back([&ioc] { ioc.run(); });
     }
 
     std::cout << "Server listening on: " << host.to_string() << ":" << port << std::endl;

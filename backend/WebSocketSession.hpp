@@ -10,6 +10,7 @@ class SharedState;
 class WebSocketSession : public std::enable_shared_from_this<WebSocketSession> {
 public:
     WebSocketSession(tcp::socket&& socket, std::shared_ptr<SharedState> const& state);
+
     ~WebSocketSession();
 
     /**
